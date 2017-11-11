@@ -1,0 +1,314 @@
+#!/bin/sh
+#
+# Toggle from USB mass storage to USB network
+#
+# $Id: usbnetwork 12467 2015-09-26 20:00:00Z NiLuJe $
+#
+##
+
+# Hardcode hackname for usbnet, because we can be called from /test/bin when invoked by the private command usbNetwork
+KH_HACKNAME="usbnet"
+
+# Try to pull our custom helper lib
+_KH_FUNCS="/mnt/us/${KH_HACKNAME}/bin/libkh5"
+if [ -f ${_KH_FUNCS} ] ; then
+    . ${_KH_FUNCS}
+else
+    # Pull default helper functions for logging
+    _FUNCTIONS=/etc/upstart/functions
+    [ -f ${_FUNCTIONS} ] && . ${_FUNCTIONS}
+    # We couldn't get our custom lib, abort
+    f_log W usbnet script "" "couldn't source libkh5 from '${KH_HACKNAME}'"
+    exit 0
+fi
+
+# We need the proper privileges (especially when called from the search bar)...
+if [ "$(id -u)" -ne 0 ] ; then
+    kh_msg "unprivileged user, aborting" E v
+    exit 1
+fi
+
+# FIXME: That's probably not needed anymore on the K5
+if [ "$1" == "status" ] ; then
+    kh_msg "we're not using usbnetd, go away" I q
+
+    # Yeah, actually, we need to return !0, that's the whole point...
+    exit 1
+fi
+
+# Load config...
+if [ -f "${USBNET_IFCONFIG}" ] ; then
+    # dos2unix...
+    sed -e "s/$(echo -ne '\r')$//g" -i ${USBNET_IFCONFIG}
+    . ${USBNET_IFCONFIG}
+else
+    kh_msg "!! your usbnet config is missing, we'll use the default values" W a "missing usbnet config"
+fi
+
+# Sanitize our user input, in case something stupid happened to the config file (like Windows...)
+# NOTE: This is obviously the fallback to default config values. Don't edit me here, that won't do a thing.
+# The live config is located in usbnet/etc/config
+if [ -z "${KINDLE_IP}" ] ; then
+    KINDLE_IP=192.168.15.244
+    kh_msg "!! your usbnet config is broken, restoring KINDLE_IP to default value" W a "broken usbnet config for KINDLE_IP"
+fi
+# Be very strict here, we only accept "true" and "false", everything else will be considered "false"!
+if [ "${USE_WIFI}" != "true" ] ; then
+    # Don't throw a fuss if we deliberately set this to "false"
+    if [ "${USE_WIFI}" != "false" ] ; then
+        USE_WIFI="false"
+        kh_msg "!! your usbnet config is broken, restoring USE_WIFI to default value" W a "broken usbnet config for USE_WIFI"
+    fi
+fi
+if [ "${USE_WIFI_SSHD_ONLY}" != "true" ] ; then
+    if [ "${USE_WIFI_SSHD_ONLY}" != "false" ] ; then
+        USE_WIFI_SSHD_ONLY="false"
+        kh_msg "!! your usbnet config is broken, restoring USE_WIFI_SSHD_ONLY to default value" W a "broken usbnet config for USE_WIFI_SSHD_ONLY"
+    fi
+fi
+if [ "${USE_OPENSSH}" != "true" ] ; then
+    if [ "${USE_OPENSSH}" != "false" ] ; then
+        USE_OPENSSH="false"
+        kh_msg "!! your usbnet config is broken, restoring USE_OPENSSH to default value" W a "broken usbnet config for USE_OPENSSH"
+    fi
+fi
+if [ "${QUIET_DROPBEAR}" != "true" ] ; then
+    if [ "${QUIET_DROPBEAR}" != "false" ] ; then
+        QUIET_DROPBEAR="false"
+        kh_msg "!! your usbnet config is broken, restoring QUIET_DROPBEAR to default value" W a "broken usbnet config for QUIET_DROPBEAR"
+    fi
+fi
+if [ "${TWEAK_MAC_ADDRESS}" != "true" ] ; then
+    if [ "${TWEAK_MAC_ADDRESS}" != "false" ] ; then
+        TWEAK_MAC_ADDRESS="false"
+        kh_msg "!! your usbnet config is broken, restoring TWEAK_MAC_ADDRESS to default value" W a "broken usbnet config for TWEAK_MAC_ADDRESS"
+    fi
+fi
+
+# Add the nopasswd flag to dropbear if we're not using WiFi
+if [ "${USE_WIFI}" == "false" ] ; then
+    SSH_DAEMON_OPTS="${SSH_DAEMON_OPTS} -n"
+fi
+
+# Add the flag needed to print an empty banner if we asked for it
+if [ "${QUIET_DROPBEAR}" == "true" ] ; then
+    SSH_DAEMON_OPTS="${SSH_DAEMON_OPTS} -b /dev/null"
+fi
+
+# Use OpenSSH instead of dropbear if we asked for it...
+if [ "${USE_OPENSSH}" == "true" ] ; then
+    SSH_DAEMON="${OPENSSH_DAEMON}"
+    SSH_DAEMON_OPTS=""
+fi
+
+# USB NET => USB MS
+usbnet_to_usbms() {
+    kh_msg "switching from usbnet to usbms" I
+    # Do we only have an SSHD to kill?
+    if [ "${USE_WIFI_SSHD_ONLY}" != "true" ] ; then
+        # Stop USB Network IF
+        kh_msg "bringing usb0 interface down" I q
+        ifconfig usb0 down || exit 0
+
+        # Unload ethernet gadget and load mass storage one
+        kh_msg "setting volumd useUsbForNetwork 0" I q
+        lipc-set-prop -i -- com.lab126.volumd useUsbForNetwork 0
+        # Apparently, volumd needs some help on the PW2...
+        kh_msg "unloading g_ether module" I q
+        modprobe -r g_ether 2>/dev/null
+        # Hold volumd's hand some more...
+        kh_msg "sending an usbUnconfigured event" I q
+        lipc-send-event -r 4 -d 2 com.lab126.hal usbUnconfigured
+        kh_msg "sending an usbPlugout event" I q
+        lipc-send-event -r 4 -d 2 com.lab126.hal usbPlugOut
+        # Let stuff settle for a while . . .
+        sleep 2
+
+        # Stop telnet & ssh daemons
+        kh_msg "stopping telnetd" I q
+        /sbin/start-stop-daemon -q -p ${TELNET_PID} -x ${TELNET_DAEMON} -K
+        if [ $? -ne 0 ] ; then
+            kh_msg "failed to stop telnetd" E
+        fi
+        # The pid was created via start-stop-daemon's -m feature, and busybox's start-stop-daemon doesn't remove the pidfile on kill
+        if [ -f ${TELNET_PID} ] ; then
+            kh_msg "cleaning up stale telnetd pidfile" I
+            rm -f ${TELNET_PID}
+        fi
+    fi
+
+    kh_msg "stopping sshd" I
+    /sbin/start-stop-daemon -q -p ${SSH_PID} -x ${SSH_DAEMON} -K
+    if [ $? -ne 0 ] ; then
+        kh_msg "failed to stop sshd" E
+    fi
+
+    # Restore iptables config
+    if [ "${USE_WIFI}" == "true" ] ; then
+        kh_msg "restoring iptables config" I
+        iptables -D INPUT -i wlan0 -p tcp --dport ssh -j ACCEPT
+    fi
+}
+
+# USB MS => USB NET
+usbms_to_usbnet() {
+    if [ "${USE_WIFI_SSHD_ONLY}" != "true" ] ; then
+        kh_msg "switching from usbms to usbnet" I
+    else
+        kh_msg "toggling sshd status" I
+    fi
+    # Do we only want an SSHD?
+    if [ "${USE_WIFI_SSHD_ONLY}" != "true" ] ; then
+        # Unload mass storage gadget and load ethernet one
+        kh_msg "setting volumd useUsbForNetwork 1 . . ." I q
+        # On the PW2, at boot, volumd might not have finished registering itself with dbus yet...
+        max_volumd_wait=10
+        wait_iter=1
+        # So try to ask a few times...
+        until lipc-set-prop -i -- com.lab126.volumd useUsbForNetwork 1 > /dev/null 2>&1 ; do
+            # Don't wait more than 10 secs...
+            let "wait_iter+=1"
+            if [ ${wait_iter} -gt ${max_volumd_wait} ] ; then
+                kh_msg "failed to communicate with volumd, giving up" E v
+                # Sleep for a while so people have time to read that...
+                sleep 5
+                # And die in a shower a sparks!
+                exit 0
+            fi
+
+            # Try again in a while...
+            kh_msg "volumd isn't quite up yet" I q
+            sleep 1
+        done
+        # Hold volumd's hand...
+        kh_msg "sending an usbUnconfigured event" I q
+        lipc-send-event -r 4 -d 2 com.lab126.hal usbUnconfigured
+        kh_msg "sending an usbPlugout event" I q
+        lipc-send-event -r 4 -d 2 com.lab126.hal usbPlugOut
+
+        # We're relying on volumd, wait until the usb0 network interface comes up, to make sure we call ifconfig with our custom IP *after* volumd...
+        kh_msg "waiting for volumd . . ." I q
+        # Start with a decent amount of sleep to let the kernel do its thing...
+        sleep 2
+
+        # Reset the counter...
+        wait_iter=1
+        # Run our little C helper to see if usb0 is up... [NOTE: Can't remember what was wrong with /sys/class/net/usb0/operstate, /proc/net/arp, /proc/net/dev or /proc/net/dev_mcast anymore, but, hey, C, shiny! :D]
+        until ${USBNET_BINDIR}/kindle_usbnet_addr > /dev/null 2>&1 ; do
+            # Don't wait more than 10 secs...
+            let "wait_iter+=1"
+            if [ ${wait_iter} -gt ${max_volumd_wait} ] ; then
+                kh_msg "usb0 is still not up, giving up" W q
+                break
+            fi
+
+            # Try again in a while...
+            kh_msg "usb0 is down" I q
+            sleep 1
+        done
+
+        # Reconfigure USB Network IF (because volumd defaults to an IP that might be different from the one we want)
+        kh_msg "reconfiguring usb0 interface" I q
+        # NOTE: If we just ate the 15s loop on kindle_usbnet_addr because the Kindle was plugged in, this will most likely fail.
+        ifconfig usb0 ${KINDLE_IP}
+        if [ $? -ne 0 ] ; then
+            # Warn the user that it failed...
+            kh_msg "failed to set usb0 ip, this is bad" E v
+            # Sleep for a while so people have time to read that...
+            sleep 5
+        fi
+
+        # Start telnet & ssh daemons
+        [ -x ${USBNET_BINDIR}/busybox ] || chmod +x ${USBNET_BINDIR}/busybox
+        # Kill stale pidfile before starting
+        if [ -f ${TELNET_PID} ] ; then
+            kh_msg "removing stale telnetd pidfile" W
+            rm -f ${TELNET_PID}
+        fi
+        kh_msg "starting telnetd" I q
+        /sbin/start-stop-daemon -m -q -p ${TELNET_PID} -x ${TELNET_DAEMON} -S -b -- ${TELNET_DAEMON_OPTS}
+        if [ $? -ne 0 ] ; then
+            kh_msg "failed to start telnetd" E v
+        fi
+    fi
+
+    [ -x /usr/bin/dropbear ] || chmod +x /usr/bin/dropbear
+    [ -x /usr/sbin/sshd ] || chmod +x /usr/sbin/sshd
+    # If we're in SSHD only mode, we'll get here *every* usbNetwork call, since we never load g_ether.
+    # So make sure we toggle SSHD start/stop instead
+    if [ -f ${SSH_PID} ] ; then
+        kh_msg "stopping sshd" I
+        /sbin/start-stop-daemon -q -p ${SSH_PID} -x ${SSH_DAEMON} -K
+        if [ $? -ne 0 ] ; then
+            kh_msg "failed to stop sshd" E
+        fi
+        # Wait for a bit, to make sure start-stop-daemon did its job...
+        sleep 2
+        # Make some noise if we *still* have a pidfile (pid mismatch? stale pidfile? crashed/broken dropbear?)
+        if [ -f ${SSH_PID} ] ; then
+            # Check if it's alive, and ours
+            pid=$( cat ${SSH_PID} )
+            # Kill stale pidfile
+            kh_msg "removing stale sshd pidfile" W
+            rm -f ${SSH_PID}
+            # If we do indeed have one, then check that it's really dropbear
+            if ps -fp ${pid} | grep -e "dropbear" > /dev/null 2>&1 ; then
+                kh_msg "killing stale dropbear sshd (${pid})" W
+                kill -TERM ${pid} 2> /dev/null
+            else
+                # It's not ours, so assume the pidfile is really stale, from a crash/hard-reboot, and that we want to *start* SSHD...
+                kh_msg "starting sshd" I
+                /sbin/start-stop-daemon -q -p ${SSH_PID} -x ${SSH_DAEMON} -S -- ${SSH_DAEMON_OPTS}
+                if [ $? -ne 0 ] ; then
+                    kh_msg "failed to start sshd" E v
+                fi
+            fi
+        fi
+    else
+        kh_msg "starting sshd" I
+        /sbin/start-stop-daemon -q -p ${SSH_PID} -x ${SSH_DAEMON} -S -- ${SSH_DAEMON_OPTS}
+        if [ $? -ne 0 ] ; then
+            kh_msg "failed to start sshd" E v
+        fi
+    fi
+
+    # Allow SSH via WiFi
+    if [ "${USE_WIFI}" == "true" ] ; then
+        kh_msg "tweaking iptables config" I
+        iptables -A INPUT -i wlan0 -p tcp --dport ssh -j ACCEPT
+    fi
+}
+
+# Go back to USB MS on stop, in order to fix the 'nothing exported over usbms' issue after an update
+# (NOTE: Might not be really that useful anymore on FW 5.x, since the ota updater trigger a full restart when it finishes...)
+# That's because volumd, which is started before us, *needs* g_file_storage loaded, or it won't properly setup the USBMS export.
+# The cleanest way to make everyone happy is to just go back to USB MS before entering the update runlevel.
+if [ "$1" == "usbms" ] ; then
+    # We only want to switch back to USB MS
+    if lsmod | grep g_ether > /dev/null ; then
+        # Send a broadcast to notify users who skipped reading the manual, because that's a BadThing(TM)...
+        # Basically, don't boot/go through rc5 while plugged to a computer, if you don't want to risk volumd pulling crazy stunts.
+        wall "We're switching back to USB MS, so if you're wondering why your terminal is frozen, go read the docs!"
+        usbnet_to_usbms
+    else
+        kh_msg "usbnet is already stopped" I
+    fi
+
+    # Go away, we wouldn't want to re-toggle after that ;).
+    return 0
+fi
+
+# Check if we're already in USB network mode, then return to USB Mass storage
+if lsmod | grep g_ether > /dev/null ; then
+    usbnet_to_usbms
+else
+    usbms_to_usbnet
+fi
+# FWIW, if we wanted to trust volumd/lipc:
+#if [ "$(lipc-get-prop -i -e -- com.lab126.volumd useUsbForNetwork)" == "1" ] ; then
+#    usbnet_to_usbms
+#else
+#    usbms_to_usbnet
+#fi
+
+exit 0

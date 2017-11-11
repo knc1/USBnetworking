@@ -1,0 +1,361 @@
+2016-07-08 21:13  NiLuJe
+
+	* [r13339] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Some more stuff missing for KOA/KT3 support...
+
+2015-09-27 10:58  NiLuJe
+
+	* [r12473] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Unbreak legacy check for the K4 (broken in last commit)
+	  * Prevent the device from shutting down when hitting the YKNR screen
+	  on legacy devices
+
+2015-09-27 10:52  NiLuJe
+
+	* [r12471] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Make the model checks more exhaustive in the KUAL extensions.
+	  Shouldn't break/change anything, though ;).
+
+2014-11-23 20:44  NiLuJe
+
+	* [r11150] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Oooh, I can't spell ;).
+
+2014-11-22 16:23  NiLuJe
+
+	* [r11129] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Use a more reliable method to check the current UID,
+	  the env cannot be trusted.
+
+2014-11-22 15:30  NiLuJe
+
+	* [r11127] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * More safety nets around the FW 5.6.1 mess...
+
+2014-11-17 18:12  NiLuJe
+
+	* [r11112] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Tweak some broken eips calls (invalid chars)
+
+2014-11-07 18:54  NiLuJe
+
+	* [r11043] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Second pass of Kindle Voyage support...
+
+2014-09-08 14:05  NiLuJe
+
+	* [r10920] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Avoid flooding KUAL's log with the connected check when unplugged
+
+2014-01-09 21:45  NiLuJe
+
+	* [r10299] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * Add a "complete uninstall" button to the KUAL extensions.
+	  Makes the uninstallers remove the hack directory from the userstore.
+
+2013-11-24 02:12  NiLuJe
+
+	* [r10168] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Slightly shorter eips message for the status button
+
+2013-11-23 16:18  NiLuJe
+
+	* [r10157] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Show the SSHD status w/ the status button
+
+2013-11-17 16:08  NiLuJe
+
+	* [r10101] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * Add a KUAL button to show the exact version of the package
+	  installed.
+	  It helps with my rolling releases snapshots, for example ;).
+
+2013-10-05 13:43  NiLuJe
+
+	* [r9916] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * We really don't want the WiFi stuff to be run on devices without
+	  WiFi.
+	  Double safety check.
+
+2013-10-05 13:16  NiLuJe
+
+	* [r9915] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Hide WiFi related stuff from the KUAL menu on the K2/DX/DXG,
+	  since they do not have a WiFi chip.
+
+2013-08-09 20:24  NiLuJe
+
+	* [r9681] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Update config md5sum
+	  * Don't restore default config with sshd/usbnet up
+
+2013-08-09 20:13  NiLuJe
+
+	* [r9680] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Make sure SSHD is down before tweaking the config file via the KUAL
+	  extension
+	  * Add a KUAL button to restore the default config
+	  * Add an experimental new setting that tries to tie the MAC address to
+	  the S/N
+
+2013-08-09 03:27  NiLuJe
+
+	* [r9675] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * More accurate status button output, especially in wifi only mode
+
+2013-08-08 20:23  NiLuJe
+
+	* [r9672] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Doesn't make any sense to try to eips those, we're already showing
+	  something
+	  right after...
+
+2013-08-08 16:56  NiLuJe
+
+	* [r9670] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Trim an eips string, to be on the safe side
+
+2013-08-08 16:55  NiLuJe
+
+	* [r9669] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * And a small comment about the toggle button in verbose mode
+
+2013-08-08 16:51  NiLuJe
+
+	* [r9668] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Fix the status KUAL button to print an actually useful & accurate
+	  status
+	  when we're in wifi only mode (thanks to zxczxc on MR for catching this
+	  ;)).
+
+2013-07-25 05:16  NiLuJe
+
+	* [r9543] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * More accurate 'plugged in' check, should now work in USBMS too :)
+
+2013-07-16 16:00  NiLuJe
+
+	* [r9509] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * Honor the verbose flag in the KUAL scripts, now that the custom
+	  status print works
+	  in the latest KUAL snapshots.
+
+2013-07-12 21:40  NiLuJe
+
+	* [r9482] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * Properly handle the KindleDX w/ latest KUAL snapshots
+
+2013-07-02 20:17  NiLuJe
+
+	* [r9416] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Tweak the KUAL menu for the K5
+
+2013-07-02 01:40  NiLuJe
+
+	* [r9394] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBnetwork:
+	  * Some fixes for the KUAL extension on FW 5.x
+
+2013-07-01 21:46  NiLuJe
+
+	* [r9387] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * Make a few comments more accurate...
+
+2013-07-01 20:14  NiLuJe
+
+	* [r9383] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * Switch to usig -m in KUAL extensions
+
+2013-07-01 01:45  NiLuJe
+
+	* [r9375] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Support QUIET_DROPBEAR in the KUAL extension
+
+2013-06-29 00:30  NiLuJe
+
+	* [r9365] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Fix the model checks around the volumd stuff, both in the menu &
+	  script
+
+2013-06-28 03:13  NiLuJe
+
+	* [r9353] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * KUAL extensions: Fix a bunch of issues (namely, I suck at RPN, and
+	  the -m operator isn't implemented)
+
+2013-06-28 01:23  NiLuJe
+
+	* [r9349] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Fix checks in the KUAl helper. Apparently, returning -1 wasn't a
+	  good idea...
+
+2013-06-27 23:09  NiLuJe
+
+	* [r9348] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBnetwork:
+	  * More accurate FIXMEs
+
+2013-06-27 23:05  NiLuJe
+
+	* [r9347] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Finish the KUAL extension, at least until I figure out the last few
+	  quirks ;).
+
+2013-06-27 19:23  NiLuJe
+
+	* [r9346] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Add a safe toggle to the KUAL menu
+
+2013-06-27 17:09  NiLuJe
+
+	* [r9345] usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Document some workarounds used with KUAL pattern matching
+
+2013-06-27 17:06  NiLuJe
+
+	* [r9344] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * Slightly less cryptic message when trying to touch the config file
+	  in usbnet mode...
+
+2013-06-27 17:04  NiLuJe
+
+	* [r9343] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBnetwork:
+	  * Fix logic fail...
+
+2013-06-27 16:44  NiLuJe
+
+	* [r9342] usbnet/bin/usbnet.sh:
+	  
+	  Kindle Hacks:
+	  * USbnetwork:
+	  * Who broke my Id SVN keyword?!
+
+2013-06-27 16:41  NiLuJe
+
+	* [r9341] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNetwork:
+	  * More KUAL actions, start messing with the config file
+
+2013-06-27 16:08  NiLuJe
+
+	* [r9340] usbnet/bin/usbnet.sh, usbnet/menu.json:
+	  
+	  Kindle Hacks:
+	  * USBNet:
+	  * Some more config trigger file added to the KUAL menu
+	  * Indicate if a setting is the default one
+	  * Workaround the borken? custom status message by using eips ourselves
+
+2013-06-27 15:46  NiLuJe
+
+	* [r9339] .[ADD], usbnet[ADD], usbnet/bin[ADD],
+	  usbnet/bin/usbnet.sh[ADD], usbnet/config.xml[ADD],
+	  usbnet/menu.json[ADD]:
+	  
+	  Kindle Hacks:
+	  * USBnetwork:
+	  * Start working on KUAL config helpers for the hacks... :)
+

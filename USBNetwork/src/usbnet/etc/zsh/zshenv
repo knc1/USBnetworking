@@ -1,0 +1,20 @@
+##
+#
+#	NiLuJe's .zshenv - eInk edition
+#
+#	kate: syntax Bash
+#
+#	$Id: zshenv 11630 2015-02-24 14:23:57Z NiLuJe $
+#
+##
+
+# Kindle or Kobo?
+local eink_userstore
+if [[ -d "/mnt/us" ]] ; then
+	eink_userstore="/mnt/us"
+else
+	eink_userstore="/mnt/onboard/.niluje"
+fi
+
+# Make sure we don't store anything in HOME, because it's either broken or a tmpfs...
+export ZDOTDIR="${eink_userstore}/usbnet/etc/zsh"

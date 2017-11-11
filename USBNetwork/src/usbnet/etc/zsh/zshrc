@@ -1,0 +1,916 @@
+##
+#
+#	NiLuJe's .zshrc - eInk edition
+#
+#	kate: syntax Bash
+#
+#	Heavily based on configs from:
+#	<slarti@gentoo.org / tom@edgeoftheinterweb.org.uk>
+#	spider <spider@gentoo.org>
+#	guckes <?>
+#	ciaranm <ciaranm@ciaranm.org>
+#	Baptux (Cf. http://forums.gentoo.org/viewtopic-t-526197.html)
+#	Frank Terbeck <ft@bewatermyfriend.de> (Cf. http://www.bewatermyfriend.de/ft/comp/data/zsh/index_en.php)
+#	Christian Schneider <strcat@gmx.net> (Cf. http://www.strcat.de/dotfiles/#zsh)
+#	And the ZSH Wiki <http://www.zshwiki.org>
+#	Prompt from http://aperiodic.net/phil/prompt/
+#
+#	$Id: zshrc 12478 2015-09-27 14:01:45Z NiLuJe $
+#
+##
+
+##
+### Aliases & Small utility functions
+#
+
+# Base
+alias a='alias'
+a ls='ls --color=auto'
+export LESSCOLOR="yes"
+a h="history -ED"
+# Break glass in case of trouble. (Cf. http://www.linux.com/howtos/Keyboard-and-Console-HOWTO-4.shtml)
+# ^L / ESC-c (Clear/Reset) [reset = echo -e \\033c]
+a rs="reset"
+
+## Invoke this every time when you change .zshrc to
+## recompile it.
+src()
+{
+	autoload -U zrecompile
+	local my_conf
+	for my_file in zshrc .zshrc .zcompdump ; do
+		my_conf="${ZDOTDIR}/${my_file}"
+		[[ -f "${my_conf}" ]] && zrecompile -p "${my_conf}"
+		[[ -f "${my_conf}.zwc.old" ]] && rm -f "${my_conf}.zwc.old"
+	done
+	source "${ZDOTDIR}/zshrc"
+}
+
+## Remove compiled & cached zshrc & compdump. After that, exit & then relaunch zsh, then src.
+## This may fix some weird behaviour when updation zsh or completion scripts
+## that a standard 'src' didn't fix...
+a rsrc="rm -rf ${ZDOTDIR}/.zcompdump ${ZDOTDIR}/.zcompdump.zwc ${ZDOTDIR}/zshrc.zwc ${ZDOTDIR}/.zshrc.zwc ${ZDOTDIR}/.zcompcache"
+
+# Still from the wiki, but tweaked a bit
+# Use the right tool to extract archived files
+extract_archive() {
+	local rar_tool rar_arg zip_tool zip_arg deb_tool deb_arg lzh_tool lzh_arg z_tool z_arg my_archive my_pwd i
+	## Return if no file
+	if [[ ! -f "${1}" ]] ; then
+		echo "'${1}' is not a valid file"
+		return 1
+	fi
+
+	## Use 7-Zip if installed
+	if 7z -h &>/dev/null ; then
+		rar_tool="7z"
+		rar_arg="x"
+		zip_tool="7z"
+		zip_arg="x"
+		deb_tool="7z"
+		deb_arg="x"
+		lzh_tool="7z"
+		lzh_arg="x"
+		z_tool="7z"
+		z_arg="x"
+	else
+		rar_tool="unrar"
+		rar_arg="x"
+		zip_tool="unzip"
+		zip_arg=""
+		deb_tool="ar"
+		deb_arg="-x"
+		lzh_tool="lha"
+		lzh_arg="e"
+		z_tool="uncompress"
+		z_arg=""
+	fi
+
+	local lower="${(L)1}"
+	local -a old_dirs
+	old_dirs=( *(N/) )
+
+	## If we passed a second arg, use it as a target directory (wich we create if needed)
+	## Some magic is needed to update the path to our archive if we cd in the new dir ;)
+	if (( ${ARGC} >= 2 )) ; then
+		mkdir -p "${2}"
+		if [[ "${?}" != "0" ]] ; then
+			print "Unable to create dir '${2}', extracting in current directory"
+			my_archive="${1}"
+		else
+			if [[ "${1}" == /* ]] ; then
+				# Absolute path, we keep it
+				my_archive="${1}"
+			else
+				# Relative path, we prepend ${PWD}
+				my_pwd="${PWD}"
+				my_archive="${my_pwd}/${1}"
+			fi
+			cd "${2}"
+		fi
+	else
+		my_archive="${1}"
+	fi
+
+	## Main
+	case "${lower}" in
+		*.tar.gz | *.tgz )				tar -zxvf "${my_archive}"		;;
+		*.gz )						gunzip "${my_archive}"			;;
+		*.tar.bz2 | *.tar.bz | *.tbz | *.tbz2 )
+								tar -jxvf "${my_archive}"
+		;;
+		*.tar.xz | *.txz )				tar -Jxvf "${my_archive}"		;;
+		*.bz2 )						bunzip2 "${my_archive}"			;;
+		*.zip )						${zip_tool} ${zip_arg} "${my_archive}"	;;
+		*.rar )						${rar_tool} ${rar_arg} "${my_archive}"	;;
+		*.tar )						tar -xvf "${my_archive}"			;;
+		*.lha | *.lzh )					${lzh_tool} ${lzh_arg} "${my_archive}"	;;
+		*.ace )						unace -x "${my_archive}"		;;
+		*.deb )						${deb_tool} ${deb_arg} "${my_archive}"	;;
+		*.Z )						${z_tool} ${z_arg} "${my_archive}"	;;
+		*.shar )					sh "${my_archive}"			;;
+		*.par2 )					par2 r "${my_archive}"			;;
+		*.7z | *.cab | *.iso | *.arj | *.chm | *.cpio | *.rpm | *.nsis )
+			7z x "${my_archive}"
+		;;
+		* )
+			print "Unknown archive type: '${my_archive}'"
+			return 1
+		;;
+	esac
+
+	# Change in to the newly created directory, and
+	# list the directory contents, if there is one.
+
+	## If we're already in the new directory because we explicitely requested it,
+	## go back to our previous dir so we won't mess this up
+	if [[ -n "${my_pwd}" ]] ; then
+		cd "${my_pwd}"
+	fi
+
+	local -a current_dirs
+	current_dirs=( *(N/) )
+	for i in {1..${#current_dirs}} ; do
+		if [[ "${current_dirs[${i}]}" != "${old_dirs[${i}]}" ]] ; then
+			cd ${current_dirs[${i}]}
+			ls
+			break
+		fi
+	done
+}
+
+a ex="extract_archive"
+
+##
+### Environment
+#
+
+# Env
+export HOSTTYPE="$(uname -m)"
+export COLORTERM="yes"
+export EDITOR="nano"
+
+# 256 Colors goodness!
+#if [[ "${TERM}" == "xterm" ]] ; then
+#	export TERM="xterm-256color"
+#fi
+
+export PAGER="less"
+export MANPAGER="less"
+
+##
+### ZSH / Modules Config
+#
+
+# Load ZSH functions
+#autoload -U zfinit; zfinit
+
+# ESC-h, ESC-H, ALT-h or ALT-H launches manpage for the current command.
+autoload run-help
+
+# Load the super-duper completion stuff
+autoload -U compinit
+compinit -u
+
+# Super-hyper mega brilliant mv
+autoload -z zmv
+
+# Makes it easy to type URLs as command line arguments. As you type, the
+# input character is analyzed and, if it may need quoting, the current
+# word is checked for a URI scheme. If one is found and the current word
+# is not already quoted, a blackslash is inserted before the input
+# caracter.
+autoload -U url-quote-magic
+zle -N self-insert url-quote-magic
+
+## This allows incremental completion of a word.
+## After starting this command, a list of completion
+## choices can be shown after every character you
+## type, which you can delete with ^h or DEL.
+## RET will accept the completion so far.
+## You can hit TAB to do normal completion, ^g to
+## abort back to the state when you started, and ^d to list the matches.
+#autoload -U incremental-complete-word
+#zle -N incremental-complete-word
+#bindkey "^Xi" incremental-complete-word ## C-x-i
+
+## This function allows you type a file pattern,
+## and see the results of the expansion at each step.
+## When you hit return, they will be inserted into the command line.
+#autoload -U insert-files
+#zle -N insert-files
+#bindkey "^Xf" insert-files ## C-x-f
+
+# This set of functions implements a sort of magic history searching.
+# After predict-on, typing characters causes the editor to look backward
+# in the history for the first line beginning with what you have typed so
+# far.  After predict-off, editing returns to normal for the line found.
+# In fact, you often don't even need to use predict-off, because if the
+# line doesn't match something in the history, adding a key performs
+# standard completion - though editing in the middle is liable to delete
+# the rest of the line.
+#autoload -U predict-on
+#zle -N predict-on
+#zle -N predict-off
+#bindkey "^X^Z" predict-on
+#bindkey "^Z" predict-off
+
+# Colors
+autoload -z colors zsh/terminfo
+colors
+
+# Make sure no cores can be dumped while zsh is in charge.
+limit coredumpsize 0
+
+# History things
+HISTFILE="${ZDOTDIR}/.zshist"
+SAVEHIST=10000
+HISTSIZE=12000
+TMPPREFIX="/tmp"
+DIRSTACKSIZE=20
+REPORTTIME=10			# Display stats for commands running for longer that $REPORTTIME seconds
+LISTMAX=0			# Completion display limit
+LISTHISTSIZE=12000		# Literal history size (?)
+
+## Auto logout after timeout in seconds
+#TMOUT=1800
+
+## If we are in X or screen then disable TMOUT
+case "${TERM}" in
+	*xterm* | rxvt | (dt|k|E)term | screen )
+		unset TMOUT
+	;;
+esac
+
+## SPROMPT - the spelling prompt
+SPROMPT='- ${fg[yellow]}correct${reset_color} '${fg[red]}%R${reset_color}'${fg[yellow]} to${reset_color} '${fg[green]}%r${reset_color}'${fg[yellow]} ? ([${fg[green]}Y${fg[yellow]}]es${reset_color}/${fg[yellow]}[${fg[red]}N${fg[yellow]}]o${reset_color}/${fg[yellow]}[${fg[cyan]}E${fg[yellow]}]dit${reset_color}/${fg[yellow]}[${fg[blue]}A${fg[yellow]}]bort)${reset_color} -'
+
+# Wiki, watch for users
+LOGCHECK=60
+WATCHFMT="- ${fg[cyan]}[${fg[green]}%B%T%b${fg[cyan]}] ${fg[green]}%B%n%b${fg[cyan]} has ${fg[green]}%a %B%l%b${fg[cyan]} from ${fg[green]}%(M:%B%M%b:%B${HOST}%b)${reset_color} -"
+watch=(all)
+
+# Time formatting
+TIMEFMT="- ${fg[cyan]}Real${fg[magenta]}:${fg[green]} %E${fg[cyan]} User${fg[magenta]}:${fg[green]} %U${fg[cyan]} System${fg[magenta]}:${fg[green]} %S${fg[cyan]} Percent${fg[magenta]}:${fg[green]} %P${fg[cyan]} Cmd${fg[magenta]}:${fg[green]} %J${fg[cyan]} MajFault${fg[magenta]}:${fg[green]} %F${fg[cyan]} VolContSw${fg[magenta]}:${fg[green]} %w${fg[cyan]} InvContSw${fg[magenta]}:${fg[green]} %c${reset_color} -"
+
+##
+### ZSH Config / Key Binds
+#
+
+# You can use:
+# % autoload -U zkbd
+# % zkbd
+# Or a quick'n dirty C-v-yourkey
+# to discover your keys.
+
+# Actually, stick with emacs for the moment. The vi keymap just doesn't
+# seem to be as complete (even if it's nicer for editing, there's no
+# execute-named-cmd bound, for example). I'm way too lazy to make my own
+# new one.
+bindkey -e
+
+# by default: export WORDCHARS='*?_-.[]~=/&;!#$%^(){}<>'
+# we take out the slash, period, angle brackets, dash here.
+export WORDCHARS='*?_[]~=&;!#$%^(){}'
+
+# Handle special keys binding automatically via terminfo (cf. http://zshwiki.org/home/zle/bindkeys)
+# create a zkbd compatible hash;
+# to add other keys to this hash, see: man 5 terminfo
+typeset -A key
+
+key[Home]=${terminfo[khome]}
+key[End]=${terminfo[kend]}
+key[Insert]=${terminfo[kich1]}
+key[Delete]=${terminfo[kdch1]}
+key[Up]=${terminfo[kcuu1]}
+key[Down]=${terminfo[kcud1]}
+key[Left]=${terminfo[kcub1]}
+key[Right]=${terminfo[kcuf1]}
+key[PageUp]=${terminfo[kpp]}
+key[PageDown]=${terminfo[knp]}
+key[Backspace]=${terminfo[kbs]}
+
+# setup key accordingly
+[[ -n "${key[Home]}" ]]		&& bindkey "${key[Home]}"	beginning-of-line
+[[ -n "${key[End]}" ]]		&& bindkey "${key[End]}"	end-of-line
+[[ -n "${key[Insert]}" ]]	&& bindkey "${key[Insert]}"	overwrite-mode
+[[ -n "${key[Delete]}" ]]	&& bindkey "${key[Delete]}"	delete-char
+[[ -n "${key[Up]}" ]]		&& bindkey "${key[Up]}"		up-line-or-history
+[[ -n "${key[Down]}" ]]		&& bindkey "${key[Down]}"	down-line-or-history
+[[ -n "${key[Left]}" ]]		&& bindkey "${key[Left]}"	backward-char
+[[ -n "${key[Right]}" ]]	&& bindkey "${key[Right]}"	forward-char
+
+[[ -n ${key[Backspace]} ]]	&& bindkey "${key[Backspace]}"	backward-delete-char
+[[ -n ${key[PageUp]} ]]		&& bindkey "${key[PageUp]}"	up-history
+[[ -n ${key[PageDown]} ]]	&& bindkey "${key[PageDown]}"	down-history
+
+# Finally, make sure the terminal is in application mode, when zle is
+# active. Only then are the values from $terminfo valid.
+if (( ${+terminfo[smkx]} )) && (( ${+terminfo[rmkx]} )) ; then
+	function zle-line-init () {
+		printf '%s' "${terminfo[smkx]}"
+	}
+	function zle-line-finish () {
+		printf '%s' "${terminfo[rmkx]}"
+	}
+	zle -N zle-line-init
+	zle -N zle-line-finish
+fi
+
+# Wiki, TAB = expand, or ignore suffix if in middle of a text
+#bindkey '^I' expand-or-complete-prefix
+# also do history expansion on space
+bindkey ' ' magic-space
+# complete on tab, leave expansion to _expand (C-x-e _expand_word && C-x-g list-expand && C-x-a _expand_alias)
+#bindkey '^I' complete-word
+
+# Undo on ESC
+bindkey '^[' undo
+
+# Back/Forward word on ^Left/Right & _Left/Right
+bindkey '^[[1;5D' emacs-backward-word
+bindkey '^[[1;5C' emacs-forward-word
+bindkey '^[[1;3D' emacs-backward-word
+bindkey '^[[1;3C' emacs-forward-word
+
+# kill-word on ^DEL & _DEL (And we have backward-kill-word on Alt-Return)
+bindkey '^[[3;5~' kill-word
+bindkey '^[[3;3~' kill-word
+
+# Make Shift+TAB useful (either as a navigation tool, or as a history-based completion tool)
+#bindkey '^[[Z' reverse-menu-complete
+bindkey '^[[Z' history-beginning-search-backward
+
+##
+### Completion \o/
+#
+
+# Follow GNU LS_COLORS
+zmodload -i zsh/complist
+eval "$(${eink_userstore}/usbnet/bin/dircolors ${ZDOTDIR}/dircolors.ansi-dark)"
+
+# Extract Archives Func
+compdef '_files -g "*.tar.gz *.tgz *.gz *.tar.bz2 *.tar.bz *.tbz *.tbz2 *.tar.xz *.txz *.bz2 *.zip *.rar *.tar .lha *.lzh *.ace *.deb *.Z *.shar *.par2 *.7z *.cab *.iso *.arj *.chm *.cpio *.rpm *.nsis"' extract_archive
+
+# Pretty menu!
+zstyle ':completion:*' menu select
+
+## completions ####
+## General completion technique
+## complete as much u can ..
+#zstyle ':completion:*' completer _complete _list _oldlist _expand _ignored _match _correct _approximate _prefix
+zstyle ':completion:*' completer _expand _complete _list _ignored _approximate
+#zstyle ':completion:*' completer _complete _prefix _approximate
+zstyle ':completion::prefix-1:*' completer _complete
+zstyle ':completion:incremental:*' completer _complete _correct
+zstyle ':completion:predict:*' completer _complete
+
+## completion caching
+zstyle ':completion:*' use-cache true
+zstyle ':completion:*' cache-path ${ZDOTDIR}/.zcompcache
+
+# Expand partial paths
+zstyle ':completion:*' expand 'yes'
+# If you end up using a directory as argument, this will remove the trailing slash (useful in ln)
+zstyle ':completion:*' squeeze-slashes 'yes'
+
+# Include non-hidden directories in globbed file completions
+# for certain commands
+zstyle ':completion::complete:*' '\'
+
+# Use menuselection for pid & man completion
+# how many completions switch on menu selection
+# use 'long' to start menu compl. if list is bigger than screen
+# or some number to start menu compl. if list has that number
+# of completions (or more).
+zstyle ':completion:*:*:(kill*|man):*' menu yes select
+zstyle ':completion:*:kill:*' force-list always
+
+# tag-order 'globbed-files directories' all-files
+zstyle ':completion::complete:*:tar:directories' file-patterns '*~.*(-/)'
+
+# Don't complete backup files as executables
+zstyle ':completion:*:complete:-command-::commands' ignored-patterns '*\~'
+
+# Separate matches into groups
+zstyle ':completion:*:matches' group 'yes'
+
+# With commands like rm, it's annoying if you keep getting offered the same
+# file multiple times. This fixes it. Also good for cp, et cetera..
+zstyle ':completion:*:(rm|kill|diff):*' ignore-line yes
+#zstyle ':completion:*:(mv|cp):*' ignore-line yes
+
+# Messages/warnings formatting
+zstyle ':completion:*' verbose yes
+zstyle ':completion:*:descriptions'	format		"- %{${fg[yellow]}%}%d%{${reset_color}%} -"
+zstyle ':completion:*:messages'		format		"- %{${fg[cyan]}%}%d%{${reset_color}%} -"
+zstyle ':completion:*:corrections'	format		"- %{${fg[yellow]}%}%d%{${reset_color}%} - (%{${fg[cyan]}%}errors %e%{${reset_color}%})"
+zstyle ':completion:*:default'		select-prompt	"%{${fg[yellow]}%}Match %{${fg_bold[cyan]}%}%m%{${fg_no_bold[yellow]}%}  Line %{${fg_bold[cyan]}%}%l%{${fg_no_bold[red]}%}  %p%{${reset_color}%}"
+zstyle ':completion:*:default'		list-prompt	"%{${fg[yellow]}%}Line %{${fg_bold[cyan]}%}%l%{${fg_no_bold[yellow]}%}  Continue?%{${reset_color}%}"
+zstyle ':completion:*:warnings'		format		"- %{${fg_no_bold[red]}%}no match%{${reset_color}%} - %{${fg_no_bold[yellow]}%}%d%{${reset_color}%}"
+zstyle ':completion:*'			group-name	''
+
+# Describe options in full
+zstyle ':completion:*:options' description 'yes'
+zstyle ':completion:*:options' auto-description '%d'
+
+# Manual pages are sorted into sections
+zstyle ':completion:*:manuals'                          separate-sections true
+zstyle ':completion:*:manuals.*'                        insert-sections   true
+
+# From the zshwiki. Hide CVS files/directores from being completed.
+zstyle ':completion:*:(all-|)files' ignored-patterns '(|*/)CVS'
+zstyle ':completion:*:cd:*' ignored-patterns '(*/)#CVS'
+
+# Also from the wiki. Hide uninteresting users from completion.
+zstyle ':completion:*:*:*:users' ignored-patterns \
+adm apache bin daemon games gdm halt ident junkbust lp mail mailnull \
+named news nfsnobody nobody nscd ntp operator pcap postgres radvd \
+rpc rpcuser rpm shutdown squid sshd sync uucp vcsa xfs backup  bind  \
+dictd  gnats  identd  irc  man  messagebus  postfix  proxy  sys \
+www-data alias amavis at clamav cmd5checkpw cron cyrus dhcp dnscache \
+dnslog foldingathome guest haldaemon jabber ldap mailman mpd mysql \
+nut p2p portage postmaster qmaild qmaill qmailp qmailq qmailr qmails \
+smmsp tinydns vpopmail wasabi zope
+
+# Still from the wiki, Ignore completion functions for commands you don't have:
+zstyle ':completion:*:(functions|parameters|association-keys)' ignored-patterns '_*'
+
+# Wiki, Ignore parent directory Useful for cd, mv and cp. Ex, cd will never select the parent directory (ie cd ../<TAB>)
+zstyle ':completion:*:(cd|mv|cp):*' ignore-parents parent pwd
+
+# Pull hosts from SSH's known_hosts, also from the wiki
+local -a _myhosts
+_myhosts=( ${${=${${(f)"$(cat ${eink_userstore}/usbnet/etc/dot.ssh/known_hosts(|2)(N) /dev/null)"}%%[# ]*}//,/ }:#\!*}
+${=${(f)"$(cat /etc/hosts(|)(N) <<(ypcat hosts 2>/dev/null))"}%%\#*} );
+zstyle ':completion:*' hosts ${_myhosts}
+
+# Approximate completion. From the wiki.
+zstyle ':completion:*:match:*' original only
+#zstyle ':completion:*:approximate:*' max-errors 1 numeric
+# Allow one error for every three characters typed in approximate completer
+zstyle -e ':completion:*:approximate:*' max-errors 'reply=( $(( (${#PREFIX}+${#SUFFIX})/3 )) numeric )'
+
+# Wiki, in recent zsh 4.1.x only: complete the names of parameters we have special completions for in parameter assignments:
+zstyle ':completion::*:(-command-|export):*' fake-parameters ${${${_comps[(I)-value-*]#*,}%%,*}:#-*-}
+
+## determine in which order the names (files) should be
+## listed and completed when using menu completion.
+## `size' to sort them by the size of the file
+## `links' to sort them by the number of links to the file
+## `modification' or `time' or `date' to sort them by the last modification time
+## `access' to sort them by the last access time
+## `inode' or `change' to sort them by the last inode change time
+## `reverse' to sort in decreasing order
+## If the style is set to any other value, or is unset, files will be
+## sorted alphabetically by name.
+zstyle ':completion:*' file-sort name
+
+## case-insensitive (uppercase from lowercase) completion
+#zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]}'
+## case-insensitive (all) completion
+zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'
+## case-insensitive, partial-word and then substring completion
+#zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
+
+## offer indexes before parameters in subscripts
+zstyle ':completion:*:*:-subscript-:*' tag-order indexes parameters
+
+## insert all expansions for expand completer
+zstyle ':completion:*:expand:*' tag-order all-expansions
+
+## ignore completion functions (until the _ignored completer)
+zstyle ':completion:*:functions' ignored-patterns '_*'
+
+## add colors to completions
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+
+## highlight aliases
+zstyle ':completion:*:aliases' list-colors "=*=${color[green]}"
+
+## highlight parameters with uncommon names
+zstyle ':completion:*:parameters' list-colors "=[^a-zA-Z]*=${color[red]}"
+
+## highlight the original input.
+zstyle ':completion:*:original' list-colors "=*=${color[red]};${color[bold]}"
+
+## highlight words like 'esac' or 'end'
+zstyle ':completion:*:reserved-words' list-colors "=*=${color[red]}"
+
+## colorize hostname completion
+zstyle ':completion:*:*:*:*:hosts' list-colors "=*=${color[cyan]};${color[bg-black]}"
+
+## colorize username completion
+zstyle ':completion:*:*:*:*:users' list-colors "=*=${color[red]};${color[bg-black]}"
+
+## colorize processlist for 'kill'
+zstyle ':completion:*:*:kill:*:processes' list-colors "=(#b) #([0-9]#) #([^ ]#)*=${color[cyan]}=${color[yellow]}=${color[green]}"
+
+## filename suffixes to ignore during completion (except after rm command)
+zstyle ':completion:*:*:(^rm):*:*files' ignored-patterns '*?.(o|c~|old|pro|zwc)' '*~'
+
+## vi(m) can ignore even more files
+zstyle ':completion::*:(vi|vim):*' ignored-patterns '*?.(o|a|lo|la|so|aux|dvi|log|swp|fig|bbl|blg|bst|idx|ind|out|toc|class|pdf|ps)'
+
+## don't complete lost+found dirs for 'cd'
+zstyle ':completion:*:cd:*' ignored-patterns '(*/)#lost+found'
+
+## on processes completion complete all user processes
+zstyle ':completion:*:processes' command 'ps --forest -A -o pid,user,cmd'
+zstyle ':completion:*:*:kill:*:processes' sort false
+zstyle ':completion:*:processes-names' command 'ps c -u ${USER} -o command | uniq'
+
+## Show "waiting dots" while ZSH does its thing \o/ (cf. http://stackoverflow.com/a/844299)
+expand-or-complete-with-dots() {
+	echo -n "${fg_bold[red]}......${reset_color}"
+	zle expand-or-complete
+	# cf. the TAB bind earlier
+	#zle complete-word
+	zle redisplay
+}
+zle -N expand-or-complete-with-dots
+bindkey "^I" expand-or-complete-with-dots
+
+## NOTE: The waiting dots have a tendency to slightly break my prompt when they hit the terminal width and are split on the next line...
+## There's a weird interaction with zsh's builtin completion in progress handling where it alleviates some of it, but not always...
+#zstyle ":completion:*" show-completer true
+
+## Always show directories first when completing.
+## NOTE: Might be better restricted to ls, if annoying.
+zstyle ':completion:*' list-dirs-first true
+
+##
+### ZSH Config / Options
+#
+
+# Big long lovely way of setting them.
+# Same order as in zshoptions(1) manpage ;)
+##
+# NOTE: Keep the warnings about inc_append_history_* & share_history in mind:
+# only one of those three options should be enabled, they're mutually exclusive.
+# Failing to follow this recommendation may lead to weird hangs, at least since zsh 5.0.6...
+# NOTE: Keep auto_cd disabled, it avoids exacerbating the issues with the command hash table
+# and the Kindle's weird fuse/vfat userstore, which confuses zsh. That way we don't break completion.
+# Note that whence still refuses to find any of the commands hosted on the userstore though...
+##
+setopt				\
+NO_auto_cd			\
+   auto_pushd			\
+NO_cdable_vars			\
+NO_chase_dots			\
+NO_chase_links			\
+NO_posix_cd			\
+   pushd_ignore_dups		\
+NO_pushd_minus			\
+   pushd_silent			\
+   pushd_to_home		\
+   				\
+   always_last_prompt		\
+   always_to_end		\
+   auto_list			\
+   auto_menu			\
+   auto_name_dirs		\
+   auto_param_keys		\
+   auto_param_slash		\
+   auto_remove_slash		\
+   bash_auto_list		\
+   complete_aliases		\
+   complete_in_word		\
+   glob_complete		\
+   hash_list_all		\
+NO_list_ambiguous		\
+NO_list_beep			\
+NO_list_packed			\
+NO_list_rows_first		\
+   list_types			\
+   menu_complete		\
+NO_rec_exact			\
+   				\
+   bad_pattern			\
+   bare_glob_qual		\
+   brace_ccl			\
+   case_glob			\
+   case_match			\
+NO_csh_null_glob		\
+NO_equals			\
+   extended_glob		\
+NO_force_float			\
+   glob				\
+NO_glob_assign			\
+NO_glob_dots			\
+NO_glob_subst			\
+NO_hist_subst_pattern		\
+NO_ignore_braces		\
+NO_ignore_close_braces		\
+NO_ksh_glob			\
+   magic_equal_subst		\
+   mark_dirs			\
+   multibyte			\
+   nomatch			\
+NO_null_glob			\
+   numeric_glob_sort		\
+   rc_expand_param		\
+NO_rematch_pcre			\
+NO_sh_glob			\
+   unset			\
+NO_warn_create_global		\
+   				\
+   append_history		\
+   bang_hist			\
+   extended_history		\
+   hist_allow_clobber		\
+NO_hist_beep			\
+   hist_expire_dups_first	\
+   hist_fcntl_lock		\
+NO_hist_find_no_dups		\
+NO_hist_ignore_all_dups		\
+   hist_ignore_dups		\
+NO_hist_ignore_space		\
+NO_hist_lex_words		\
+NO_hist_no_functions		\
+NO_hist_no_store		\
+   hist_reduce_blanks		\
+   hist_save_by_copy		\
+NO_hist_save_no_dups		\
+   hist_verify			\
+   inc_append_history		\
+NO_inc_append_history_time	\
+NO_share_history		\
+   				\
+NO_all_export			\
+   global_export		\
+   global_rcs			\
+   rcs				\
+   				\
+   aliases			\
+   clobber			\
+   correct			\
+   correct_all			\
+NO_dvorak			\
+NO_flow_control			\
+NO_ignore_eof			\
+   interactive_comments		\
+   hash_cmds			\
+   hash_dirs			\
+NO_hash_executables_only	\
+NO_mail_warning			\
+   path_dirs			\
+NO_path_script			\
+NO_print_eight_bit		\
+NO_print_exit_value		\
+NO_rc_quotes			\
+NO_rm_star_silent		\
+NO_rm_star_wait			\
+   short_loops			\
+NO_sun_keyboard_hack		\
+   				\
+NO_auto_continue		\
+NO_auto_resume			\
+NO_bgnice			\
+NO_check_jobs			\
+NO_hup				\
+   long_list_jobs		\
+   notify			\
+NO_posix_jobs			\
+   				\
+NO_prompt_bang			\
+   prompt_cr			\
+   prompt_sp			\
+   prompt_percent		\
+   prompt_subst			\
+NO_transient_rprompt		\
+   				\
+   c_bases			\
+NO_c_precedences		\
+   debug_before_cmd		\
+NO_err_exit			\
+NO_err_return			\
+   eval_lineno			\
+   exec				\
+   function_argzero		\
+NO_local_loops			\
+   local_options		\
+NO_local_patterns		\
+NO_local_traps			\
+   multi_func_def		\
+   multios			\
+NO_octal_zeroes			\
+NO_pipe_fail			\
+NO_source_trace			\
+NO_typeset_silent		\
+NO_verbose			\
+NO_xtrace			\
+   				\
+NO_bash_rematch			\
+NO_bsd_echo			\
+NO_continue_on_error		\
+NO_csh_junkie_history		\
+NO_csh_junkie_loops		\
+NO_csh_junkie_quotes		\
+NO_csh_nullcmd			\
+NO_ksh_arrays			\
+NO_ksh_autoload			\
+NO_ksh_option_print		\
+NO_ksh_typeset			\
+NO_ksh_zero_subscript		\
+NO_posix_aliases		\
+NO_posix_argzero		\
+NO_posix_builtins		\
+NO_posix_identifiers		\
+NO_posix_strings		\
+NO_posix_traps			\
+NO_sh_file_expansion		\
+NO_sh_nullcmd			\
+NO_sh_option_letters		\
+NO_sh_word_split		\
+NO_traps_async			\
+   				\
+NO_beep				\
+NO_combining_chars		\
+NO_emacs			\
+NO_overstrike			\
+NO_single_line_zle		\
+NO_vi				\
+   zle
+
+##
+### Awesome Prompt \o/
+#
+
+# Activate Loadavg / Free?
+PR_WANT_LOADMEM="true"
+
+precmd()
+{
+	local TERMWIDTH=$(( ${COLUMNS} - 1 ))
+
+	# Truncate the path if it's too long.
+
+	PR_FILLBAR=""
+	PR_PWDLEN=""
+
+	local promptsize=${#${(%):---(%n@%m:%l)---()--}}
+	local pwdsize=${#${(%):-%~}}
+
+	if [[ "${promptsize} + ${pwdsize}" -gt ${TERMWIDTH} ]] ; then
+		PR_PWDLEN=$(( ${TERMWIDTH} - ${promptsize} ))
+	else
+		PR_FILLBAR="\${(l.$((${TERMWIDTH} - (${promptsize} + ${pwdsize})))..${PR_HBAR}.)}"
+	fi
+
+	# Get loadavg & memory use
+	if [[ "${PR_WANT_LOADMEM}" == "true" ]] ; then
+		PR_LOAD_RESULT="$(< /proc/loadavg)"
+		PR_FREE_RESULT="$(free -m 2>/dev/null)"
+
+		# Get battery status
+		PR_BATTERY_RESULT="N/A"
+		for my_batt in /sys/devices/system/wario_battery/wario_battery0/battery_capacity /sys/devices/system/yoshi_battery/yoshi_battery0/battery_capacity /sys/devices/system/luigi_battery/luigi_battery0/battery_capacity /sys/devices/platform/pmic_battery.1/power_supply/mc13892_bat/capacity /usr/bin/gasgauge-info ; do
+			if [[ -f "${my_batt}" ]] ; then
+				# Handle gasgauge-info for legacy Kindles...
+				if [[ -x "${my_batt}" ]] ; then
+					PR_BATTERY_RESULT="$(${my_batt} -c 2>/dev/null)"
+					break
+				else
+					PR_BATTERY_RESULT="$(< ${my_batt})"
+					break
+				fi
+			fi
+		done
+		# And make the color meaningful...
+		if [[ "${PR_BATTERY_RESULT}" == "N/A" ]] ; then
+			PR_BATT='${PR_LIGHT_CYAN}${PR_BATTERY_RESULT}${PR_LIGHT_BLUE}:'
+		else
+			# Strip the eventual percentage sign... (depends on the FW version)
+			PR_BATTERY_RESULT="${PR_BATTERY_RESULT//\%/}"
+			# NOTE: Since we need to do the math everytime, we can't do this in setprompt ;).
+			if (( PR_BATTERY_RESULT >= 75 )) ; then
+				PR_BATT='${PR_LIGHT_CYAN}${PR_BATTERY_RESULT}%%${PR_LIGHT_BLUE}:'
+			elif (( PR_BATTERY_RESULT > 25 )) ; then
+				PR_BATT='${PR_LIGHT_MAGENTA}${PR_BATTERY_RESULT}%%${PR_LIGHT_BLUE}:'
+			else
+				PR_BATT='${PR_LIGHT_RED}%S${PR_BATTERY_RESULT}%%%s${PR_LIGHT_BLUE}:'
+			fi
+		fi
+	fi
+}
+
+preexec()
+{
+	if [[ "${TERM}" == "screen" ]] ; then
+		local CMD="${1[(wr)^(*=*|sudo|exec|nice|schedtool|-*)]}"
+		echo -n "\ek${CMD}\e\\"
+	fi
+}
+
+
+setprompt()
+{
+	# cf. https://wiki.archlinux.org/index.php/Zsh#Colors
+	for color in RED GREEN YELLOW BLUE MAGENTA CYAN WHITE ; do
+		eval PR_${color}='%{${fg_bold[${(L)color}]}%}'
+		eval PR_LIGHT_${color}='%{${fg[${(L)color}]}%}'
+		count=$(( ${count} + 1 ))
+	done
+	PR_NO_COLOUR="%{${reset_color}%}"
+
+	# See if we can use extended characters to look nicer.
+	typeset -A altchar
+	set -A altchar ${(s..)terminfo[acsc]}
+	PR_SET_CHARSET="%{${terminfo[enacs]}%}"
+	PR_SHIFT_IN="%{${terminfo[smacs]}%}"
+	PR_SHIFT_OUT="%{${terminfo[rmacs]}%}"
+	PR_HBAR="${altchar[q]:--}"
+	PR_ULCORNER="${altchar[l]:--}"
+	PR_LLCORNER="${altchar[m]:--}"
+	PR_LRCORNER="${altchar[j]:--}"
+	PR_URCORNER="${altchar[k]:--}"
+
+	# Decide if we need to set titlebar text.
+	case ${TERM} in
+		*xterm*|rxvt*|(dt|k|E|a|ml)term)
+			PR_TITLEBAR=$'%{\e]0;%(!.-=*[ROOT]*=- | .)%n@%m:%~ | ${COLUMNS}x${LINES} | %y\a%}'
+		;;
+		screen)
+			PR_TITLEBAR=$'%{\e_screen \005 (\005t) | %(!.-=[ROOT]=- | .)%n@%m:%~ | ${COLUMNS}x${LINES} | %y\e\\%}'
+		;;
+		*)
+			PR_TITLEBAR=''
+		;;
+	esac
+
+	# Decide whether to set a screen title
+	if [[ "${TERM}" == "screen" ]] ; then
+		PR_STITLE=$'%{\ekzsh\e\\%}'
+	else
+		PR_STITLE=''
+	fi
+
+	# Loadavg & Memory
+	if [[ "${PR_WANT_LOADMEM}"  == "true" ]] ; then
+		PR_LOAD='${PR_LIGHT_GREEN}${PR_LOAD_RESULT[(w)1]}${PR_LIGHT_BLUE}:'
+		# Used Mem +/- Buff
+		#PR_MEM='${PR_LIGHT_CYAN}${PR_FREE_RESULT[(f)3][(w)3]}${PR_LIGHT_BLUE}:'
+		# Used Mem +/- Buff / Total memory percentage
+		PR_MEM_PERC='$(printf %d $(( ${PR_FREE_RESULT[(f)3][(w)3]}.0 / ${PR_FREE_RESULT[(f)2][(w)2]}.0 * 100 )))'
+		PR_MEM='${PR_LIGHT_CYAN}${(e)PR_MEM_PERC}%%${PR_LIGHT_BLUE}:'
+	else
+		PR_LOAD=''
+		PR_MEM=''
+		PR_BATT=''
+	fi
+
+	# Make it pop when connected to a remote box, because I keep typing stuff in the wrong terminal...
+	if [[ -n "${SSH_CONNECTION}" ]] ; then
+		PR_HOST='%S%m%s'
+	else
+		PR_HOST='%m'
+	fi
+
+	# Finally, the prompt.
+	PROMPT='${PR_SET_CHARSET}${PR_STITLE}${(e)PR_TITLEBAR}\
+${PR_CYAN}${PR_SHIFT_IN}${PR_ULCORNER}${PR_BLUE}${PR_HBAR}${PR_SHIFT_OUT}(\
+${PR_RED}%(!.%SROOT%s.%n)${PR_BLUE}@${PR_GREEN}${PR_HOST}${PR_BLUE}:${PR_WHITE}%l\
+${PR_BLUE})${PR_SHIFT_IN}${PR_HBAR}${PR_CYAN}${PR_HBAR}${(e)PR_FILLBAR}${PR_BLUE}${PR_HBAR}${PR_SHIFT_OUT}(\
+${PR_MAGENTA}%${PR_PWDLEN}<...<%~%<<\
+${PR_BLUE})${PR_SHIFT_IN}${PR_HBAR}${PR_CYAN}${PR_URCORNER}${PR_SHIFT_OUT}\
+
+${PR_CYAN}${PR_SHIFT_IN}${PR_LLCORNER}${PR_BLUE}${PR_HBAR}${PR_SHIFT_OUT}(\
+%(?..${PR_LIGHT_RED}%?${PR_BLUE}:)\
+${(e)PR_LOAD}${(e)PR_MEM}\
+${PR_YELLOW}%D{%H:%M}${PR_LIGHT_BLUE}:\
+${(e)PR_BATT}\
+%(!.${PR_RED}.${PR_WHITE})%#${PR_BLUE})${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}\
+${PR_CYAN}${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}\
+${PR_NO_COLOUR} '
+
+	RPROMPT=' ${PR_CYAN}${PR_SHIFT_IN}${PR_HBAR}${PR_BLUE}${PR_HBAR}${PR_SHIFT_OUT}\
+(${PR_YELLOW}%D{%a, %b %d}${PR_BLUE})${PR_SHIFT_IN}${PR_HBAR}${PR_CYAN}${PR_LRCORNER}${PR_SHIFT_OUT}${PR_NO_COLOUR}'
+
+	PS2='${PR_CYAN}${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}\
+${PR_BLUE}${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}(\
+${PR_LIGHT_GREEN}%_${PR_BLUE})${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}\
+${PR_CYAN}${PR_SHIFT_IN}${PR_HBAR}${PR_SHIFT_OUT}${PR_NO_COLOUR} '
+}
+
+setprompt
